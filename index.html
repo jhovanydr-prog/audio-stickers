@@ -110,6 +110,7 @@
         const ffmpeg = createFFmpeg({ log: true });
 
         // --- 1. CARGA DEL VIDEO DESDE TIKTOK ---
+// --- 1. CARGA DEL VIDEO DESDE TIKTOK ---
         async function fetchVideo() {
             const urlInput = document.getElementById('tiktokUrl').value;
             if (!urlInput) return showModal('⚠️', 'URL requerida', 'Pega un enlace de TikTok.');
@@ -118,14 +119,14 @@
             document.getElementById('btnSpinner').classList.remove('hidden');
 
             try {
-                // Usamos la API pública para extraer el enlace directo
-                const apiUrl = `https://tdownv4.sl-bjs.workers.dev/?down=${encodeURIComponent(urlInput)}`;
+                // Usamos la API de TikWM (Más estable)
+                const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(urlInput)}`;
                 const response = await fetch(apiUrl);
-                const data = await response.json();
+                const json = await response.json();
 
-                if (data && data.url) {
-                    // Usamos un proxy público para evitar bloqueos CORS al descargar en FFmpeg
-                    cleanVideoUrl = `https://corsproxy.io/?${encodeURIComponent(data.url)}`;
+                // TikWM guarda el enlace del video limpio en json.data.play
+                if (json && json.data && json.data.play) {
+                    cleanVideoUrl = `https://corsproxy.io/?${encodeURIComponent(json.data.play)}`;
                     
                     const wrapper = document.getElementById('videoWrapper');
                     wrapper.innerHTML = `
@@ -137,7 +138,6 @@
                     
                     videoElement = document.getElementById('realVideo');
                     
-                    // Esperar a que el video cargue sus metadatos para configurar la duración
                     videoElement.addEventListener('loadedmetadata', () => {
                         maxDuration = videoElement.duration;
                         updateTimeLabels();
@@ -153,7 +153,8 @@
                     throw new Error("No se extrajo URL");
                 }
             } catch (error) {
-                showModal('❌', 'Error de extracción', 'No pudimos descargar el video. Verifica el enlace o intenta de nuevo.');
+                console.error(error);
+                showModal('❌', 'Error de extracción', 'No pudimos descargar el video. Verifica que el video sea público.');
             } finally {
                 document.getElementById('btnText').innerText = "Cargar Video";
                 document.getElementById('btnSpinner').classList.add('hidden');
