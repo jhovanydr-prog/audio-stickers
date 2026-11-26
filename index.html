@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Creador de Stickers MP4</title>
     
-    <!-- Diseño visual libre de bloqueos -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- NUEVO MOTOR: FFmpeg v12 (No requiere configuraciones de servidor) -->
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
     <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     
@@ -51,11 +48,4 @@
             <div>
                 <div class="flex justify-between text-xs text-gray-400 font-mono">
                     <span id="timeStartLabel">00:00</span>
-                    <span id="timeEndLabel">Calculando...</span>
-                </div>
-                <div class="timeline-container" id="timeline">
-                    <div class="timeline-track" id="track" style="left: 0%; right: 0%;"></div>
-                    <div class="timeline-handle" id="handleStart" style="left: 0%;"></div>
-                    <div class="timeline-handle" id="handleEnd" style="right: 0%;"></div>
-                </div>
-                <div class="text-center text-xs text-pink
+                    <span id="timeEndLabel">
