@@ -173,7 +173,6 @@
                 localVideoBlobUrl = URL.createObjectURL(videoBlob);
                 
                 const wrapper = document.getElementById('videoWrapper');
-                // SE ELIMINÓ 'muted' y SE AGREGÓ 'controls' para escuchar y manipular el audio
                 wrapper.innerHTML = `
                     <video id="realVideo" src="${localVideoBlobUrl}" class="video-placeholder" controls loop playsinline></video>
                     <div class="crop-box" id="cropBox">
@@ -228,10 +227,15 @@
                     });
                     
                     const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+                    const wrapperURL = "https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd";
+                    
                     const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
                     const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+                    
+                    // SOLUCIÓN AL ERROR: Forzamos la descarga del sub-proceso rebelde "814" como Blob local
+                    const classWorkerURL = await toBlobURL(`${wrapperURL}/814.ffmpeg.js`, 'text/javascript');
 
-                    await ffmpeg.load({ coreURL, wasmURL });
+                    await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
                 }
 
                 const box = document.getElementById('cropBox');
@@ -364,17 +368,12 @@
                 startPercent = percent;
                 handleStart.style.left = `${startPercent}%`; 
                 track.style.left = `${startPercent}%`;
-                
-                // SINCRONIZACIÓN: Al mover la barra izquierda, el video salta a ese segundo
                 if(videoElement) videoElement.currentTime = (startPercent / 100) * maxDuration;
-                
             } else {
                 if (percent < startPercent + 2) percent = startPercent + 2;
                 endPercent = percent;
                 handleEnd.style.left = `${endPercent}%`; 
                 track.style.right = `${100 - endPercent}%`;
-                
-                // SINCRONIZACIÓN: Al mover la barra derecha, el video salta a ese segundo
                 if(videoElement) videoElement.currentTime = (endPercent / 100) * maxDuration;
             }
             updateTimeLabels();
