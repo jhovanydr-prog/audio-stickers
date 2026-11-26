@@ -130,12 +130,10 @@
                 const r1 = await fetch(url);
                 if (r1.ok) return await r1.blob();
             } catch(e) {}
-            
             try {
                 const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
                 if (r2.ok) return await r2.blob();
             } catch(e) {}
-            
             const r3 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
             if (!r3.ok) throw new Error("No se pudo descargar el archivo.");
             return await r3.blob();
@@ -214,10 +212,28 @@
 
             try {
                 if (!ffmpeg) {
+                    progressText.innerText = "Evadiendo bloqueos de seguridad del navegador...";
+                    
+                    // SOLUCIÓN MAESTRA: Descargamos el archivo rebelde y lo convertimos en un objeto local 
+                    const workerRes = await fetch('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/814.ffmpeg.js');
+                    const workerBlob = await workerRes.blob();
+                    const localWorkerUrl = URL.createObjectURL(workerBlob);
+                    
+                    // Inyectamos el interceptor: Si la librería pide el archivo bloqueado, le damos nuestro archivo local permitido
+                    if (!window.__workerPatched) {
+                        const OriginalWorker = window.Worker;
+                        window.Worker = function(scriptURL, options) {
+                            if (scriptURL.toString().includes('814.ffmpeg.js')) {
+                                return new OriginalWorker(localWorkerUrl, options);
+                            }
+                            return new OriginalWorker(scriptURL, options);
+                        };
+                        window.__workerPatched = true;
+                    }
+
                     progressText.innerText = "Cargando motor de video...";
                     
                     const { FFmpeg } = window.FFmpegWASM || window.FFmpeg;
-                    const { fetchFile, toBlobURL } = window.FFmpegUtil;
                     ffmpeg = new FFmpeg();
                     
                     ffmpeg.on('progress', ({ progress }) => {
@@ -226,16 +242,13 @@
                         progressText.innerText = `Renderizando video: ${percent}%`;
                     });
                     
-                    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
-                    const wrapperURL = "https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd";
+                    const coreRes = await fetch('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js');
+                    const coreURL = URL.createObjectURL(await coreRes.blob());
                     
-                    const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-                    const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
-                    
-                    // SOLUCIÓN AL ERROR: Forzamos la descarga del sub-proceso rebelde "814" como Blob local
-                    const classWorkerURL = await toBlobURL(`${wrapperURL}/814.ffmpeg.js`, 'text/javascript');
+                    const wasmRes = await fetch('https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm');
+                    const wasmURL = URL.createObjectURL(await wasmRes.blob());
 
-                    await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
+                    await ffmpeg.load({ coreURL, wasmURL });
                 }
 
                 const box = document.getElementById('cropBox');
@@ -255,7 +268,7 @@
 
                 progressText.innerText = "Preparando archivo...";
                 
-                const fileData = window.FFmpegUtil ? await window.FFmpegUtil.fetchFile(localVideoBlobUrl) : await fetch(localVideoBlobUrl).then(r => r.arrayBuffer()).then(b => new Uint8Array(b));
+                const fileData = await fetch(localVideoBlobUrl).then(r => r.arrayBuffer()).then(b => new Uint8Array(b));
                 await ffmpeg.writeFile('input.mp4', fileData);
 
                 progressText.innerText = "Cortando y encuadrando...";
