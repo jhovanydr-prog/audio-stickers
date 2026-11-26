@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Creador de Stickers MP4</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librería de FFmpeg para navegador -->
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
         .timeline-container { position: relative; height: 40px; background: #374151; border-radius: 8px; margin-top: 10px; overflow: hidden; }
@@ -13,7 +12,6 @@
         .timeline-handle { position: absolute; top: 0; bottom: 0; width: 10px; background: #ec4899; cursor: ew-resize; z-index: 10; display: flex; align-items: center; justify-content: center; }
         .timeline-handle::after { content: ''; width: 2px; height: 15px; background: white; }
         
-        /* Ajustado para que el video llene el contenedor y la matemática de recorte sea exacta */
         .video-wrapper { position: relative; width: 100%; max-width: 320px; height: 568px; background: #000; margin: 0 auto; border-radius: 12px; overflow: hidden; display: none; }
         .video-placeholder { width: 100%; height: 100%; object-fit: fill; } 
         
@@ -30,7 +28,6 @@
     <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-2xl p-6">
         <h1 class="text-2xl font-bold text-center mb-6 text-pink-500">Sticker MP4 Editor</h1>
         
-        <!-- Paso 1: Input URL -->
         <div id="step-url" class="space-y-4">
             <p class="text-sm text-gray-400 text-center">Pega el enlace de TikTok</p>
             <input type="text" id="tiktokUrl" placeholder="https://vm.tiktok.com/..." class="w-full bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 border border-gray-600">
@@ -40,29 +37,24 @@
             </button>
         </div>
 
-        <!-- Paso 2: Edición -->
         <div id="step-edit" class="hidden mt-6 space-y-6">
             <div class="text-center text-xs text-gray-400 mb-2">Arrastra para encuadrar y recorta el tiempo.</div>
             
-            <div class="video-wrapper" id="videoWrapper">
-                <!-- Se inyectará el video real aquí -->
-            </div>
+            <div class="video-wrapper" id="videoWrapper"></div>
 
-            <!-- Línea de tiempo -->
             <div>
                 <div class="flex justify-between text-xs text-gray-400 font-mono">
                     <span id="timeStartLabel">00:00</span>
-                    <span id="timeEndLabel">00:15</span>
+                    <span id="timeEndLabel">Calculando...</span>
                 </div>
                 <div class="timeline-container" id="timeline">
                     <div class="timeline-track" id="track" style="left: 0%; right: 0%;"></div>
                     <div class="timeline-handle" id="handleStart" style="left: 0%;"></div>
                     <div class="timeline-handle" id="handleEnd" style="right: 0%;"></div>
                 </div>
-                <div class="text-center text-xs text-pink-400 mt-2 font-mono">Duración: <span id="durationLabel">15</span>s</div>
+                <div class="text-center text-xs text-pink-400 mt-2 font-mono">Duración: <span id="durationLabel">0</span>s</div>
             </div>
 
-            <!-- Opciones -->
             <div class="flex items-center justify-between bg-gray-700 p-4 rounded-lg border border-gray-600">
                 <div>
                     <p class="font-semibold text-sm">Mantener Audio</p>
@@ -74,7 +66,6 @@
                 </div>
             </div>
 
-            <!-- Barra de progreso FFmpeg (Oculta al inicio) -->
             <div id="progressContainer" class="hidden mt-4">
                 <div class="w-full bg-gray-600 rounded-full h-2">
                     <div id="progressBar" class="bg-pink-500 h-2 rounded-full" style="width: 0%"></div>
@@ -82,7 +73,6 @@
                 <p id="progressText" class="text-xs text-center mt-2 text-gray-400">Preparando motor de video...</p>
             </div>
 
-            <!-- Botón Final -->
             <button id="genBtn" onclick="generateMP4()" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 rounded-lg transition-colors flex justify-center items-center shadow-lg shadow-pink-500/30">
                 <span id="genBtnText">Descargar MP4</span>
             </button>
@@ -100,37 +90,41 @@
     </div>
 
     <script>
-        // Variables globales
-        let maxDuration = 15; 
+        let maxDuration = 0; 
         let startPercent = 0;
         let endPercent = 100;
-        let cleanVideoUrl = '';
+        let localVideoBlobUrl = '';
         let videoElement;
         const { createFFmpeg, fetchFile } = FFmpeg;
         const ffmpeg = createFFmpeg({ log: true });
 
-        // --- 1. CARGA DEL VIDEO DESDE TIKTOK ---
-// --- 1. CARGA DEL VIDEO DESDE TIKTOK ---
         async function fetchVideo() {
             const urlInput = document.getElementById('tiktokUrl').value;
             if (!urlInput) return showModal('⚠️', 'URL requerida', 'Pega un enlace de TikTok.');
             
-            document.getElementById('btnText').innerText = "Extrayendo...";
+            document.getElementById('btnText').innerText = "Descargando media (puede tardar)...";
             document.getElementById('btnSpinner').classList.remove('hidden');
 
             try {
-                // Usamos la API de TikWM (Más estable)
+                // Obtener enlace de TikWM
                 const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(urlInput)}`;
                 const response = await fetch(apiUrl);
                 const json = await response.json();
 
-                // TikWM guarda el enlace del video limpio en json.data.play
                 if (json && json.data && json.data.play) {
-                    cleanVideoUrl = `https://corsproxy.io/?${encodeURIComponent(json.data.play)}`;
+                    const rawUrl = json.data.play;
+                    // Descargar el video como Blob para evadir bloqueos de renderizado
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`;
+                    
+                    const videoResponse = await fetch(proxyUrl);
+                    if (!videoResponse.ok) throw new Error("Fallo al descargar Blob");
+                    
+                    const videoBlob = await videoResponse.blob();
+                    localVideoBlobUrl = URL.createObjectURL(videoBlob);
                     
                     const wrapper = document.getElementById('videoWrapper');
                     wrapper.innerHTML = `
-                        <video id="realVideo" src="${cleanVideoUrl}" class="video-placeholder" loop muted crossorigin="anonymous" playsinline></video>
+                        <video id="realVideo" src="${localVideoBlobUrl}" class="video-placeholder" loop muted playsinline></video>
                         <div class="crop-box" id="cropBox">
                             <div class="crop-resizer" id="cropResizer"></div>
                         </div>
@@ -138,6 +132,7 @@
                     
                     videoElement = document.getElementById('realVideo');
                     
+                    // Asegurar lectura de duración real sin límites
                     videoElement.addEventListener('loadedmetadata', () => {
                         maxDuration = videoElement.duration;
                         updateTimeLabels();
@@ -154,14 +149,13 @@
                 }
             } catch (error) {
                 console.error(error);
-                showModal('❌', 'Error de extracción', 'No pudimos descargar el video. Verifica que el video sea público.');
+                showModal('❌', 'Error de extracción', 'Fallo de red o enlace privado.');
             } finally {
                 document.getElementById('btnText').innerText = "Cargar Video";
                 document.getElementById('btnSpinner').classList.add('hidden');
             }
         }
 
-        // --- 2. MOTOR FFMPEG (Recorte y Exportación) ---
         async function generateMP4() {
             const btn = document.getElementById('genBtn');
             btn.disabled = true;
@@ -174,13 +168,11 @@
             progressContainer.classList.remove('hidden');
 
             try {
-                // Cargar FFmpeg si no está listo
                 if (!ffmpeg.isLoaded()) {
-                    progressText.innerText = "Cargando motor FFmpeg (1ra vez toma unos segundos)...";
+                    progressText.innerText = "Cargando motor de recorte...";
                     await ffmpeg.load();
                 }
 
-                // Matemáticas del Recorte (Traducir UI a Píxeles de Video)
                 const box = document.getElementById('cropBox');
                 const wrapper = document.getElementById('videoWrapper');
                 
@@ -192,44 +184,37 @@
                 const cropX = Math.round(box.offsetLeft * scaleX);
                 const cropY = Math.round(box.offsetTop * scaleY);
 
-                // Matemáticas del Tiempo
                 const startTime = (startPercent / 100 * maxDuration).toFixed(2);
                 const endTime = (endPercent / 100 * maxDuration).toFixed(2);
                 const keepAudio = document.getElementById('audioToggle').checked;
 
-                // Evento de progreso de FFmpeg
                 ffmpeg.setProgress(({ ratio }) => {
                     const percent = Math.round(ratio * 100);
                     progressBar.style.width = `${percent}%`;
                     progressText.innerText = `Renderizando video: ${percent}%`;
                 });
 
-                // Descargar archivo a memoria
-                progressText.innerText = "Descargando video fuente...";
-                ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(cleanVideoUrl));
+                progressText.innerText = "Preparando archivo fuente...";
+                ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(localVideoBlobUrl));
 
-                // Construir comando de FFmpeg
-                progressText.innerText = "Cortando y re-encuadrando...";
+                progressText.innerText = "Cortando y encuadrando...";
                 const args = [
                     '-i', 'input.mp4',
                     '-ss', startTime.toString(),
                     '-to', endTime.toString(),
                     '-filter:v', `crop=${cropW}:${cropH}:${cropX}:${cropY}`,
-                    '-preset', 'ultrafast' // Acelera el procesamiento en el navegador
+                    '-preset', 'ultrafast'
                 ];
-                if (!keepAudio) args.push('-an'); // Quitar audio si se desactivó
+                if (!keepAudio) args.push('-an');
                 args.push('output.mp4');
 
-                // Ejecutar comando
                 await ffmpeg.run(...args);
 
-                // Extraer el archivo resultante
                 progressText.innerText = "Generando archivo final...";
                 const data = ffmpeg.FS('readFile', 'output.mp4');
                 const videoBlob = new Blob([data.buffer], { type: 'video/mp4' });
                 const finalUrl = URL.createObjectURL(videoBlob);
 
-                // Forzar la descarga en el navegador
                 const a = document.createElement('a');
                 a.href = finalUrl;
                 a.download = `sticker_${new Date().getTime()}.mp4`;
@@ -238,12 +223,12 @@
                 document.body.removeChild(a);
 
                 progressContainer.classList.add('hidden');
-                showModal('✅', '¡Listo!', 'El video optimizado se ha descargado a tu galería.');
+                showModal('✅', '¡Listo!', 'El video optimizado se descargó.');
 
             } catch (error) {
                 console.error(error);
                 progressContainer.classList.add('hidden');
-                showModal('❌', 'Error de proceso', 'Hubo un error al compilar el video.');
+                showModal('❌', 'Error de compilación', 'No se pudo generar el MP4. Asegúrate de haber agregado el archivo vercel.json en GitHub.');
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -251,7 +236,6 @@
             }
         }
 
-        // --- 3. LÓGICA DEL CROP BOX ---
         function reasignarEventosCropBox() {
             const box = document.getElementById('cropBox');
             const resizer = document.getElementById('cropResizer');
@@ -259,27 +243,25 @@
             let isDragging = false, isResizing = false;
             let startX, startY, startLeft, startTop, startWidth, startHeight;
 
-            box.addEventListener('mousedown', (e) => {
+            const initDrag = (e) => {
                 if (e.target === resizer) return;
-                isDragging = true; startX = e.clientX; startY = e.clientY;
+                isDragging = true;
+                startX = e.clientX || e.touches[0].clientX;
+                startY = e.clientY || e.touches[0].clientY;
                 startLeft = box.offsetLeft; startTop = box.offsetTop;
-            });
-            box.addEventListener('touchstart', (e) => {
-                if (e.target === resizer) return;
-                isDragging = true; startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-                startLeft = box.offsetLeft; startTop = box.offsetTop;
-            });
+            };
+            
+            const initResize = (e) => {
+                e.stopPropagation(); isResizing = true;
+                startX = e.clientX || e.touches[0].clientX;
+                startY = e.clientY || e.touches[0].clientY;
+                startWidth = box.offsetWidth; startHeight = box.offsetHeight;
+            };
 
-            resizer.addEventListener('mousedown', (e) => {
-                e.stopPropagation(); isResizing = true;
-                startX = e.clientX; startY = e.clientY;
-                startWidth = box.offsetWidth; startHeight = box.offsetHeight;
-            });
-            resizer.addEventListener('touchstart', (e) => {
-                e.stopPropagation(); isResizing = true;
-                startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-                startWidth = box.offsetWidth; startHeight = box.offsetHeight;
-            });
+            box.addEventListener('mousedown', initDrag);
+            box.addEventListener('touchstart', initDrag);
+            resizer.addEventListener('mousedown', initResize);
+            resizer.addEventListener('touchstart', initResize);
 
             const mover = (clientX, clientY) => {
                 if (isDragging) {
@@ -306,7 +288,6 @@
             document.addEventListener('touchend', () => { isDragging = false; isResizing = false; });
         }
 
-        // --- 4. LÓGICA DE LÍNEA DE TIEMPO ---
         const handleStart = document.getElementById('handleStart');
         const handleEnd = document.getElementById('handleEnd');
         const track = document.getElementById('track');
@@ -323,7 +304,7 @@
         document.addEventListener('touchend', () => draggingHandle = null);
 
         const moveTimeline = (clientX) => {
-            if (!draggingHandle) return;
+            if (!draggingHandle || maxDuration === 0) return;
             const rect = timeline.getBoundingClientRect();
             let percent = ((clientX - rect.left) / rect.width) * 100;
             percent = Math.max(0, Math.min(100, percent));
@@ -346,6 +327,7 @@
         document.addEventListener('touchmove', (e) => moveTimeline(e.touches[0].clientX));
 
         function updateTimeLabels() {
+            if (maxDuration === 0) return;
             const currentStart = (startPercent / 100 * maxDuration).toFixed(1);
             const currentEnd = (endPercent / 100 * maxDuration).toFixed(1);
             document.getElementById('timeStartLabel').innerText = `00:${currentStart.padStart(4, '0')}`;
@@ -353,7 +335,6 @@
             document.getElementById('durationLabel').innerText = (currentEnd - currentStart).toFixed(1);
         }
 
-        // Modal Utilities
         function showModal(icon, title, text) {
             document.getElementById('modalIcon').innerText = icon;
             document.getElementById('modalTitle').innerText = title;
