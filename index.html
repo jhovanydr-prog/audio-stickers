@@ -48,4 +48,33 @@
             <div>
                 <div class="flex justify-between text-xs text-gray-400 font-mono">
                     <span id="timeStartLabel">00:00</span>
-                    <span id="timeEndLabel">
+                    <span id="timeEndLabel">Calculando...</span>
+                </div>
+                <div class="timeline-container" id="timeline">
+                    <div class="timeline-track" id="track" style="left: 0%; right: 0%;"></div>
+                    <div class="timeline-handle" id="handleStart" style="left: 0%;"></div>
+                    <div class="timeline-handle" id="handleEnd" style="right: 0%;"></div>
+                </div>
+                <div class="text-center text-xs text-pink-400 mt-2 font-mono">Duración: <span id="durationLabel">0</span>s</div>
+            </div>
+
+            <div class="flex items-center justify-between bg-gray-700 p-4 rounded-lg border border-gray-600">
+                <div>
+                    <p class="font-semibold text-sm">Mantener Audio</p>
+                    <p class="text-xs text-gray-400">Requerido para el sticker</p>
+                </div>
+                <div class="relative inline-block w-12 mr-2 align-middle select-none">
+                    <input type="checkbox" id="audioToggle" checked class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 transition-all duration-300"/>
+                    <label for="audioToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-400 cursor-pointer"></label>
+                </div>
+            </div>
+
+            <div id="progressContainer" class="hidden mt-4">
+                <div class="w-full bg-gray-600 rounded-full h-2">
+                    <div id="progressBar" class="bg-pink-500 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+                <p id="progressText" class="text-xs text-center mt-2 text-gray-400">Preparando motor de video...</p>
+            </div>
+
+            <button id="genBtn" onclick="generateMP4()" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 rounded-lg transition-colors flex justify-center items-center shadow-lg shadow-pink-500/30">
+                <span id="genBtnText">Descargar MP
