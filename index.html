@@ -6,7 +6,7 @@
     <title>Creador de Stickers MP4</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
     <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     
     <style>
@@ -53,7 +53,7 @@
                 <div class="timeline-container" id="timeline">
                     <div class="timeline-track" id="track" style="left: 0%; right: 0%;"></div>
                     <div class="timeline-handle" id="handleStart" style="left: 0%;"></div>
-                    <div class="timeline-handle" id="handleEnd" style="right: 0%;"></div>
+                    <div class="timeline-handle" id="handleEnd" style="left: 100%; margin-left: -10px;"></div>
                 </div>
                 <div class="text-center text-xs text-pink-400 mt-2 font-mono">Duración: <span id="durationLabel">0</span>s</div>
             </div>
@@ -82,7 +82,7 @@
         </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Modal de Alertas -->
     <div id="modal" class="modal-overlay flex">
         <div class="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 border border-gray-700 shadow-2xl">
             <div id="modalIcon" class="text-4xl text-center mb-4">ℹ️</div>
@@ -93,15 +93,13 @@
     </div>
 
     <script>
-        // 1. CAZADOR DE ERRORES VISUAL (Muestra los errores ocultos en pantalla)
         window.onerror = function(msg, url, line) {
-            showModal('🐛', 'Error de Código', `Algo bloqueó la página.<br>Error: <b>${msg}</b><br>Línea: ${line}`);
+            showModal('🐛', 'Error de Código', `Error: <b>${msg}</b>`);
             resetButton();
             return false;
         };
-
         window.addEventListener("unhandledrejection", function(event) {
-            showModal('🚨', 'Error de Red', `Fallo de conexión o API rechazada.<br>Detalle: <b>${event.reason}</b>`);
+            showModal('🚨', 'Error Interno', `Detalle: <b>${event.reason}</b>`);
             resetButton();
         });
 
@@ -120,7 +118,6 @@
             if (btnSpinner) btnSpinner.classList.add('hidden');
         }
 
-        // 2. VARIABLES GLOBALES
         let maxDuration = 0; 
         let startPercent = 0;
         let endPercent = 100;
@@ -128,20 +125,19 @@
         let videoElement;
         let ffmpeg = null;
 
-        // 3. LOGICA DE DESCARGA SUPER-ROBUSTA (Intenta 3 formas de bajar el video)
         async function fetchVideoBlob(url) {
             try {
                 const r1 = await fetch(url);
                 if (r1.ok) return await r1.blob();
-            } catch(e) { console.log('Intento directo falló'); }
+            } catch(e) {}
             
             try {
                 const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
                 if (r2.ok) return await r2.blob();
-            } catch(e) { console.log('Proxy 1 falló'); }
+            } catch(e) {}
             
             const r3 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
-            if (!r3.ok) throw new Error("No se pudo descargar el archivo de video en ningún proxy.");
+            if (!r3.ok) throw new Error("No se pudo descargar el archivo.");
             return await r3.blob();
         }
 
@@ -155,14 +151,12 @@
             let rawUrl = null;
 
             try {
-                // Extracción API 1
                 try {
                     const response1 = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(urlInput)}`);
                     const json1 = await response1.json();
                     if (json1?.data?.play) rawUrl = json1.data.play;
                 } catch(e) {}
 
-                // Extracción API 2
                 if (!rawUrl) {
                     try {
                         const response2 = await fetch(`https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(urlInput)}`);
@@ -171,16 +165,17 @@
                     } catch(e) {}
                 }
 
-                if (!rawUrl) throw new Error("Las APIs de TikTok rechazaron el enlace o está privado.");
+                if (!rawUrl) throw new Error("El video es privado o las APIs están caídas.");
 
-                document.getElementById('btnText').innerText = "Descargando archivo...";
+                document.getElementById('btnText').innerText = "Descargando...";
 
                 const videoBlob = await fetchVideoBlob(rawUrl);
                 localVideoBlobUrl = URL.createObjectURL(videoBlob);
                 
                 const wrapper = document.getElementById('videoWrapper');
+                // SE ELIMINÓ 'muted' y SE AGREGÓ 'controls' para escuchar y manipular el audio
                 wrapper.innerHTML = `
-                    <video id="realVideo" src="${localVideoBlobUrl}" class="video-placeholder" loop muted playsinline></video>
+                    <video id="realVideo" src="${localVideoBlobUrl}" class="video-placeholder" controls loop playsinline></video>
                     <div class="crop-box" id="cropBox">
                         <div class="crop-resizer" id="cropResizer"></div>
                     </div>
@@ -201,13 +196,12 @@
                 document.getElementById('videoWrapper').style.display = 'block';
 
             } catch (error) {
-                showModal('❌', 'Error de Extracción', error.message || 'Fallo desconocido de red.');
+                showModal('❌', 'Fallo', error.message);
             } finally {
                 resetButton();
             }
         }
 
-        // 4. MOTOR FFMPEG SEGURO
         async function generateMP4() {
             const btn = document.getElementById('genBtn');
             btn.disabled = true;
@@ -221,15 +215,11 @@
 
             try {
                 if (!ffmpeg) {
-                    progressText.innerText = "Cargando motor de recorte...";
+                    progressText.innerText = "Cargando motor de video...";
                     
-                    if (window.FFmpegWASM) {
-                        ffmpeg = new window.FFmpegWASM.FFmpeg();
-                    } else if (window.FFmpeg) {
-                        ffmpeg = new window.FFmpeg.FFmpeg();
-                    } else {
-                        throw new Error("La librería FFmpeg no cargó. Refresca la página.");
-                    }
+                    const { FFmpeg } = window.FFmpegWASM || window.FFmpeg;
+                    const { fetchFile, toBlobURL } = window.FFmpegUtil;
+                    ffmpeg = new FFmpeg();
                     
                     ffmpeg.on('progress', ({ progress }) => {
                         const percent = Math.round(progress * 100);
@@ -237,10 +227,11 @@
                         progressText.innerText = `Renderizando video: ${percent}%`;
                     });
                     
-                    await ffmpeg.load({
-                        coreURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
-                        wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm"
-                    });
+                    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+                    const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+                    const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+
+                    await ffmpeg.load({ coreURL, wasmURL });
                 }
 
                 const box = document.getElementById('cropBox');
@@ -289,7 +280,7 @@
                 document.body.removeChild(a);
 
                 progressContainer.classList.add('hidden');
-                showModal('✅', '¡Listo!', 'El video optimizado se descargó a tu galería.');
+                showModal('✅', '¡Listo!', 'El video optimizado se descargó a tu dispositivo.');
 
             } catch (error) {
                 progressContainer.classList.add('hidden');
@@ -301,7 +292,6 @@
             }
         }
 
-        // 5. EVENTOS CROP Y TIMELINE (Reducidos y optimizados)
         function reasignarEventosCropBox() {
             const box = document.getElementById('cropBox');
             const resizer = document.getElementById('cropResizer');
@@ -372,11 +362,20 @@
             if (draggingHandle === 'start') {
                 if (percent > endPercent - 2) percent = endPercent - 2;
                 startPercent = percent;
-                handleStart.style.left = `${startPercent}%`; track.style.left = `${startPercent}%`;
+                handleStart.style.left = `${startPercent}%`; 
+                track.style.left = `${startPercent}%`;
+                
+                // SINCRONIZACIÓN: Al mover la barra izquierda, el video salta a ese segundo
+                if(videoElement) videoElement.currentTime = (startPercent / 100) * maxDuration;
+                
             } else {
                 if (percent < startPercent + 2) percent = startPercent + 2;
                 endPercent = percent;
-                handleEnd.style.left = `${100 - endPercent}%`; track.style.right = `${100 - endPercent}%`;
+                handleEnd.style.left = `${endPercent}%`; 
+                track.style.right = `${100 - endPercent}%`;
+                
+                // SINCRONIZACIÓN: Al mover la barra derecha, el video salta a ese segundo
+                if(videoElement) videoElement.currentTime = (endPercent / 100) * maxDuration;
             }
             updateTimeLabels();
         };
